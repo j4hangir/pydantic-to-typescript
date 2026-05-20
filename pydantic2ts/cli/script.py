@@ -363,16 +363,20 @@ def generate_typescript_defs(
 
     LOG.info("Converting JSON schema to typescript definitions...")
 
-    json2ts_args = shlex.split(json2ts_cmd) + [
-        "-i",
-        schema_file_path,
-        "-o",
-        output,
-        "--bannerComment",
-        "",
-    ]
     try:
+        json2ts_args = shlex.split(json2ts_cmd) + [
+            "-i",
+            schema_file_path,
+            "-o",
+            output,
+            "--bannerComment",
+            "",
+        ]
         json2ts_exit_code = subprocess.run(json2ts_args).returncode
+    except ValueError as e:
+        raise RuntimeError(
+            f'"{json2ts_cmd}" could not be parsed as a shell command.'
+        ) from e
     except OSError as e:
         raise RuntimeError(
             f'"{json2ts_cmd}" failed with exit code 127. Is json2ts installed?'
