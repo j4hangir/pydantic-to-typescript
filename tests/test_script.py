@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 import pytest
 
+import pydantic2ts.cli.script as script
 from pydantic2ts import generate_typescript_defs
 from pydantic2ts.cli.script import _generate_json_schema, parse_cli_args
 from pydantic2ts.pydantic_v2 import enabled as v2_enabled
@@ -186,6 +187,37 @@ def test_error_if_json2ts_not_installed(tmp_path: Path):
             json2ts_cmd=invalid_local_cmd,
         )
     assert str(exc2.value).startswith(f'"{invalid_local_cmd}" failed with exit code ')
+
+
+def test_json2ts_command_and_output_are_passed_as_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    module_path = _python_module_path("single_module", _PYDANTIC_VERSIONS[0])
+    output_path = str(tmp_path / "types;$(touch injected)`echo injected` with spaces.ts")
+    recorded_calls = []
+
+    def fake_run(argv):
+        recorded_calls.append(argv)
+        Path(argv[argv.index("-o") + 1]).write_text(
+            "export interface _Master_ {\n}\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(script.subprocess, "run", fake_run)
+
+    generate_typescript_defs(
+        module_path,
+        output_path,
+        json2ts_cmd="bun x json-schema-to-typescript",
+    )
+
+    assert len(recorded_calls) == 1
+    json2ts_args = recorded_calls[0]
+    assert json2ts_args[:3] == ["bun", "x", "json-schema-to-typescript"]
+    assert json2ts_args[3] == "-i"
+    assert json2ts_args[4].endswith("schema.json")
+    assert json2ts_args[5:] == ["-o", output_path, "--bannerComment", ""]
 
 
 def test_error_if_invalid_module_path(tmp_path: Path):

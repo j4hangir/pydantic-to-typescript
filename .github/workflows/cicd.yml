@@ -48,6 +48,10 @@ jobs:
           uv python install ${{ matrix.python-version }}
           uv sync --all-extras --dev
           uv run pytest --cov=pydantic2ts
+      - name: (ubuntu) Run action argv shell test
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        shell: bash
+        run: bash tests/action_argv_test.sh
       - name: (ubuntu 3.9) Run tests against 'pydantic==1.8.2' and generate an LCOV file for Coveralls
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9' }}
         run: |

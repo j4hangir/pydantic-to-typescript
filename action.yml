@@ -65,12 +65,19 @@ runs:
         INPUT_TS_FILE: ${{ inputs.ts-file }}
         INPUT_EXCLUDE_MODELS: ${{ inputs.exclude-models }}
       run: |
-        CMD="pydantic2ts --module $INPUT_PY_MODULE --output $INPUT_TS_FILE"
-        for model in ${INPUT_EXCLUDE_MODELS//,/ }
-        do
-            CMD+=" --exclude $model"
-        done
-        eval "$CMD"
+        args=(--module "$INPUT_PY_MODULE" --output "$INPUT_TS_FILE")
+        if [ -n "$INPUT_EXCLUDE_MODELS" ]; then
+          IFS=',' read -r -a exclude_models <<< "$INPUT_EXCLUDE_MODELS"
+          for model in "${exclude_models[@]}"
+          do
+              model="${model#"${model%%[![:space:]]*}"}"
+              model="${model%"${model##*[![:space:]]}"}"
+              if [ -n "$model" ]; then
+                args+=(--exclude "$model")
+              fi
+          done
+        fi
+        pydantic2ts "${args[@]}"
     - name: Check if typescript definitions changed
       uses: tj-actions/verify-changed-files@v10.1
       id: check-ts-defs

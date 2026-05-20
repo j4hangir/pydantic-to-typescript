@@ -4,7 +4,9 @@ import inspect
 import json
 import logging
 import os
+import shlex
 import shutil
+import subprocess
 import sys
 from contextlib import ExitStack, contextmanager
 from importlib.util import module_from_spec, spec_from_file_location
@@ -361,11 +363,22 @@ def generate_typescript_defs(
 
     LOG.info("Converting JSON schema to typescript definitions...")
 
-    json2ts_exit_code = os.system(
-        f'{json2ts_cmd} -i {schema_file_path} -o {output} --bannerComment ""'
-    )
-
-    shutil.rmtree(schema_dir)
+    json2ts_args = shlex.split(json2ts_cmd) + [
+        "-i",
+        schema_file_path,
+        "-o",
+        output,
+        "--bannerComment",
+        "",
+    ]
+    try:
+        json2ts_exit_code = subprocess.run(json2ts_args).returncode
+    except OSError as e:
+        raise RuntimeError(
+            f'"{json2ts_cmd}" failed with exit code 127. Is json2ts installed?'
+        ) from e
+    finally:
+        shutil.rmtree(schema_dir)
 
     if json2ts_exit_code == 0:
         _clean_output_file(output)
