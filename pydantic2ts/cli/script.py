@@ -47,7 +47,7 @@ def _import_module(path: str) -> ModuleType:
     definition exist in sys.modules under that name.
     """
     try:
-        if os.path.exists(path):
+        if os.path.isfile(path):
             name = uuid4().hex
             spec = spec_from_file_location(name, path, submodule_search_locations=[])
             assert spec is not None, f"spec_from_file_location failed for {path}"
@@ -128,7 +128,7 @@ def _get_model_config(model: Type[Any]) -> "Union[ConfigDict, Type[BaseConfig]]"
     Return the 'config' for a pydantic model.
     In version 1 of pydantic, this is a class. In version 2, it's a dictionary.
     """
-    if hasattr(model, "Config") and inspect.isclass(model.Config):
+    if _is_v1_model(model) and hasattr(model, "Config") and inspect.isclass(model.Config):
         return model.Config
     return model.model_config
 
@@ -156,6 +156,21 @@ def _extract_pydantic_models(module: ModuleType) -> List[type]:
         models.extend(_extract_pydantic_models(submodule))
 
     return models
+
+
+def _normalize_schema_for_json2ts(schema: Any) -> None:
+    if isinstance(schema, dict):
+        if "prefixItems" in schema and "items" not in schema:
+            schema["items"] = schema.pop("prefixItems")
+        if "$ref" in schema and len(schema) > 1:
+            ref = schema.pop("$ref")
+            all_of = schema.pop("allOf", [])
+            schema["allOf"] = [{"$ref": ref}, *all_of]
+        for value in schema.values():
+            _normalize_schema_for_json2ts(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            _normalize_schema_for_json2ts(item)
 
 
 def _clean_json_schema(schema: Dict[str, Any], model: Any = None) -> None:
@@ -198,6 +213,8 @@ def _clean_json_schema(schema: Dict[str, Any], model: Any = None) -> None:
                     exc_info=True,
                 )
 
+    _normalize_schema_for_json2ts(schema)
+
 
 def _clean_output_file(output_filename: str) -> None:
     """
@@ -208,7 +225,7 @@ def _clean_output_file(output_filename: str) -> None:
        By rolling them all up into a single model, we can generate a single output file.
     2. Add a banner comment with clear instructions for regenerating the typescript definitions.
     """
-    with open(output_filename, "r") as f:
+    with open(output_filename, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     start, end = None, None
@@ -233,7 +250,7 @@ def _clean_output_file(output_filename: str) -> None:
 
     new_lines = banner_comment_lines + lines[:start] + lines[(end + 1) :]
 
-    with open(output_filename, "w") as f:
+    with open(output_filename, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
 
